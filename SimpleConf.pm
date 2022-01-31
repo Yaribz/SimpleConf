@@ -1,6 +1,6 @@
 # A Perl module implementing a basic config file handling functionality.
 #
-# Copyright (C) 2013  Yann Riou <yaribzh@gmail.com>
+# Copyright (C) 2013-2022  Yann Riou <yaribzh@gmail.com>
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -104,6 +104,65 @@ sub writeConf {
     print $fh "$line\n";
   }
   $fh->close();
+}
+
+sub updateConf {
+  my ($file,$r_conf)=@_;
+  my @lines;
+  my %conf;
+  if(-e $file) {
+    if(! -f $file || ! -r $file) {
+      print "ERROR - Not a readable file \"$file\"\n";
+      exit 1;
+    }
+    my $rc=open(my $fh,'<',$file);
+    if(! $rc) {
+      print "ERROR - Unable to read configuration file \"$file\" ($!)\n";
+      exit 1;
+    }
+    while(<$fh>) {
+      if(/^\s*(\#.*)?$/) {
+        push(@lines,$_);
+        next;
+      }
+      if(/^\s*([^:]*[^:\s])\s*:\s*((?:.*[^\s])?)\s*$/) {
+        my ($param,$value)=($1,$2);
+        if(exists $conf{$param}) {
+          print "ERROR - Duplicate setting \"$param\" in configuration file \"$file\"\n";
+          close($fh);
+          exit 1;
+        }
+        push(@lines,[$param,$value]);
+        $conf{$param}=\$lines[-1][1];
+      }else{
+        s/[\cJ\cM]*$//;
+        print "ERROR - Invalid line \"$_\" in configuration file \"$file\"\n";
+        close($fh);
+        exit 1;
+      }
+    }
+    close($fh);
+  }
+  foreach my $param (sort keys %{$r_conf}) {
+    if(exists $conf{$param}) {
+      ${$conf{$param}}=$r_conf->{$param};
+    }else{
+      push(@lines,[$param,$r_conf->{$param}]);
+    }
+  }
+  my $rc=open(my $fh,'>',$file);
+  if(! $rc) {
+    print "ERROR - Unable to write configuration file \"$file\" ($!)\n";
+    exit 1;
+  }
+  foreach my $line (@lines) {
+    if(ref $line eq 'ARRAY') {
+      print $fh "$line->[0]:$line->[1]\n";
+    }else{
+      print $fh $line;
+    }
+  }
+  close($fh);
 }
 
 1;
